@@ -1,0 +1,346 @@
+#!/usr/bin/env bash
+#
+# Setup dotfiles in this login session
+
+THIS_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}" )" &>/dev/null; pwd -P)"
+THIS_SCRIPT_NAME="$( basename "${BASH_SOURCE[0]}" )"
+
+DATESTAMP="$(date "+%Y%m%d_%H%M%S_%Z" )"
+
+THIS_LOG_PATH="/tmp/$THIS_SCRIPT_NAME.$DATESTAMP.log"
+exec 2>"$THIS_LOG_PATH"
+
+set -uexv
+
+cd "$THIS_SCRIPT_DIR" >&2
+
+function log {
+	echo -e "$@" | tee -a "$THIS_LOG_PATH"
+}
+
+function backup_this {
+	local BACKUP_TARGET_HOME_PATH="${1-}"
+	local BACKUP_TARGET_RELATIVE_PATH="${BACKUP_TARGET_HOME_PATH#$HOME_PATH}"
+	local BACKUP_TARGET_BACKUP_PATH="$DOTFILES_BACKUPS_DIR/$BACKUP_TARGET_RELATIVE_PATH"
+
+	# return early if target doesn't exist
+	[[ ! -e "$BACKUP_TARGET_HOME_PATH" ]] && return 0
+
+	local BACKUP_TARGET_BACKUP_DIR="$( dirname "$BACKUP_TARGET_BACKUP_PATH" )"
+	if [[ ! -d "$BACKUP_TARGET_BACKUP_DIR" ]] ; then
+		mkdir -p "$BACKUP_TARGET_BACKUP_DIR"
+	fi
+
+	# move to backups directory, and rename with a timestamp
+	rsync \
+	   -av \
+	   --remove-source-files \
+	   "$BACKUP_TARGET_HOME_PATH" \
+	   "$BACKUP_TARGET_BACKUP_PATH.bak.$DATESTAMP" \
+	   >&2
+}
+
+function copy_this {
+	local COPY_SOURCE="${1-}"
+	local COPY_DEST="${2-}"
+
+	local COPY_DEST_DIR="$( dirname "$COPY_DEST" )"
+	if [[ ! -d "$COPY_DEST_DIR" ]] ; then
+		mkdir -p "$COPY_DEST_DIR"
+	fi
+
+	if [[ -f "$COPY_SOURCE" ]] ; then
+		# just copy the file
+		rsync -av "${COPY_SOURCE}" "${COPY_DEST}" >&2
+	elif [[ -d "$COPY_SOURCE" ]] ; then
+		# copy the directory more carefully
+		# without the trailing slashes, another copy of source dir might
+		# be copied into the dest dir, if the dest dir already exists
+		rsync -av "${COPY_SOURCE}/" "${COPY_DEST}/" >&2
+	fi
+}
+
+function restore_this {
+	# Finds the latest backup of the target dotfile in HOME_PATH, and renames it
+	# to the original filename
+	local RESTORE_TARGET_HOME_PATH="${1-}"
+	local RESTORE_TARGET_RELATIVE_PATH="${RESTORE_TARGET_HOME_PATH#$HOME_PATH}"
+	local RESTORE_TARGET_BACKUP_PATH="$DOTFILES_BACKUPS_DIR/$RESTORE_TARGET_RELATIVE_PATH"
+
+	local RESTORE_TARGET_BACKUP_DIR="$(  dirname  "$RESTORE_TARGET_BACKUP_PATH" )"
+	local RESTORE_TARGET_HOME_DIR="$(    dirname  "$RESTORE_TARGET_HOME_PATH"   )"
+	local RESTORE_TARGET_NAME="$(        basename "$RESTORE_TARGET_HOME_PATH"   )"
+	local RESTORE_SOURCE="$( \
+		find "$RESTORE_TARGET_BACKUP_DIR" \
+		-mindepth 1 \
+		-maxdepth 1 \
+		-name "$RESTORE_TARGET_NAME.bak.*" \
+		| sort \
+		| tail -1
+	)"
+	
+	if [[ ! -e "$RESTORE_SOURCE" ]] ; then
+		echo "No backup found for '$RESTORE_TARGET_HOME_PATH'"
+		return 0
+	fi
+
+	rsync \
+	   -av \
+	   --remove-source-files \
+	   "$RESTORE_SOURCE" \
+	   "$RESTORE_TARGET_HOME_PATH" \
+	   >&2
+}
+
+function get_absolute_path {
+	local RELATIVE_PATH="${1-./}"
+	local ABSOLUTE_PATH=""
+	local ABSOLUTE_PATH_DIR=""
+	local ABSOLUTE_PATH_NAME=""
+	
+	if [[ -d "$RELATIVE_PATH" ]] ; then
+		ABSOLUTE_PATH="$(cd "$RELATIVE_PATH" &>/dev/null; pwd -P)"
+	elif [[ -f "$RELATIVE_PATH" ]] ; then
+		ABSOLUTE_PATH_DIR="$(cd "$( dirname "$RELATIVE_PATH" )" &>/dev/null; pwd -P)"
+		ABSOLUTE_PATH_NAME="${RELATIVE_PATH##*/}"
+		ABSOLUTE_PATH="$ABSOLUTE_PATH_DIR/$ABSOLUTE_PATH_NAME"
+		if [[ -f "$ABSOLUTE_PATH" ]] ; then
+			# Absolute path is good
+			true
+		else
+			# resolving absolute path didn't work...
+			echo "Absolute Path for '$RELATIVE_PATH' from '$(pwd -P)' -> '$ABSOLUTE_PATH', does not exist" >&2
+		fi
+	else
+		echo "Can't find absolute path for '$RELATIVE_PATH' from '$(pwd -P)'" >&2
+		return 1
+	fi
+
+	echo "$ABSOLUTE_PATH"
+}
+
+function should_merge_this_dotfile {
+	local DOTFILE_HOME_PATH="${1-}"
+	local DOTFILE_NAME="$(basename "$DOTFILE_HOME_PATH" )"
+
+	if [[ -f "$DOTFILE_HOME_PATH" ]] ; then
+		for HOME_FILE_TO_APPEND in "${HOME_FILES_TO_APPEND[@]}" ; do
+			if [[ "$DOTFILE_NAME" = "$HOME_FILE_TO_APPEND" ]] ; then
+				return 0
+			fi
+		done
+	elif [[ -d "$DOTFILE_HOME_PATH" ]] ; then
+		for HOME_DIR_TO_MERGE in "${HOME_DIRS_TO_MERGE[@]}" ; do
+			if [[ "$DOTFILE_NAME" = "$HOME_DIR_TO_MERGE" ]] ; then
+				return 0
+			fi
+		done
+	fi
+
+	return 1
+}
+
+function merge_this_dotfile {
+	local DOTFILE_PROFILE_PATH="${1-}"
+	local DOTFILE_HOME_PATH="${2-}"
+	local DOTFILE_RELATIVE_PATH="${DOTFILE_HOME_PATH#$HOME_PATH}"
+	local DOTFILE_MERGE_PATH="$DOTFILES_MERGE_DIR/$DOTFILE_RELATIVE_PATH"
+	local DOTFILE_MERGE_DIR="$( dirname "$DOTFILE_MERGE_PATH" )"
+
+	mkdir -p "$DOTFILE_MERGE_DIR"
+
+	if [[ -e "$DOTFILE_HOME_PATH" ]] ; then
+		# make a merge copy
+		# backup the original
+		# symlink to the merge copy
+		copy_this   "$DOTFILE_HOME_PATH" "$DOTFILE_MERGE_PATH"
+		backup_this "$DOTFILE_HOME_PATH"
+		ln -s "$DOTFILE_MERGE_PATH" "$DOTFILE_HOME_PATH"
+	else
+		return 0
+	fi
+
+	if [[ -f "$DOTFILE_HOME_PATH" ]] ; then
+		{
+			echo "===== START $DOTFILE_PROFILE_PATH ====="
+			cat "$DOTFILE_PROFILE_PATH"
+			echo "===== END   $DOTFILE_PROFILE_PATH ====="
+		} >> "$DOTFILE_HOME_PATH"
+	elif [[ -d "$DOTFILE_HOME_PATH" ]] ; then
+		install_profile_dir_into_home_dir "$DOTFILE_PROFILE_PATH" "$DOTFILE_HOME_PATH"
+	fi
+
+}
+
+function install_this_dotfile {
+	local DOTFILE_PATH="${1-}"
+	local DOTFILE_NAME="$( basename "$DOTFILE_PATH" )"
+	local DOTFILE_PROFILE_PATH="$PROFILE_ROOT_DIR/$DOTFILE_PATH"
+	local DOTFILE_HOME_PATH="$HOME_PATH/$DOTFILE_PATH"
+
+	# Attempt to install each file/dir from profile dir into corresponding home dir
+	if   [[ ! -e "$DOTFILE_HOME_PATH" ]] ; then
+		ln -s "$DOTFILE_PROFILE_PATH" "$DOTFILE_HOME_PATH"
+	elif [[ -L "$DOTFILE_HOME_PATH" ]] ; then
+		# Remove symlink and replace with symlink to new profile
+		rm "$DOTFILE_HOME_PATH"
+		ln -s "$DOTFILE_PROFILE_PATH" "$DOTFILE_HOME_PATH"
+	elif [[ -f "$DOTFILE_HOME_PATH" ]] || [[ -d "$DOTFILE_HOME_PATH" ]] ; then
+		# target dotfile already exists as a regular file
+		if should_merge_this_dotfile "$DOTFILE_HOME_PATH" ; then
+			merge_this_dotfile "$DOTFILE_PROFILE_PATH" "$DOTFILE_HOME_PATH"
+		else
+			# backup and symlink to dotfile profile path
+			backup_this "$DOTFILE_HOME_PATH"
+			ln -s "$DOTFILE_PROFILE_PATH" "$DOTFILE_HOME_PATH"
+		fi
+	else
+		# If it is not a regular file, directory, or symlink, then
+		# this script shouldn't do anything to it
+		log "Skipping '$DOTFILE_PROFILE_PATH' -> '$DOTFILE_HOME_PATH', since it is not a regular file/directory"
+	fi
+}
+
+function uninstall_this_dotfile {
+	local DOTFILE_PATH="${1-}"
+	local DOTFILE_NAME="$( basename "$DOTFILE_PATH" )"
+	local DOTFILE_PROFILE_PATH="$PROFILE_ROOT_DIR/$DOTFILE_PATH"
+	local DOTFILE_HOME_PATH="$HOME_PATH/$DOTFILE_PATH"
+
+	# Attempt to restore the original DOTFILE in the HOME path
+	if [[ -L "$DOTFILE_HOME_PATH" ]] ; then
+		# Remove symlink and restore with original
+		rm "$DOTFILE_HOME_PATH"
+		restore_this "$DOTFILE_HOME_PATH"
+	else
+		echo "Not modifying '$DOTFILE_HOME_PATH', since it was expected to be a symlink" >&2
+		true
+	fi
+}
+
+function uninstall_profile_dir_from_home_dir {
+	local PROFILE_DIR="${1-}"
+	local HOME_DIR="${2-}"
+
+	perform_action_between_profile_dir_and_home_dir uninstall "$PROFILE_DIR" "$HOME_DIR"
+}
+
+function install_profile_dir_into_home_dir {
+	local PROFILE_DIR="${1-}"
+	local HOME_DIR="${2-}"
+
+	perform_action_between_profile_dir_and_home_dir install "$PROFILE_DIR" "$HOME_DIR"
+}
+
+function perform_action_between_profile_dir_and_home_dir {
+	local ACTION="${1-}"
+	local PROFILE_DIR="${2-}"
+	local HOME_DIR="${3-}"
+
+	if [[ "${PROFILE_ROOT_DIR-notset}" = "notset" ]] ; then
+		local PROFILE_ROOT_DIR="$PROFILE_DIR"
+	fi
+	local PROFILE_DIR_RELATIVE_TO_PROFILE_ROOT="${PROFILE_DIR#$PROFILE_ROOT_DIR}"
+
+	if [[ "$PROFILE_DIR_RELATIVE_TO_PROFILE_ROOT" = "" ]] ; then
+		PROFILE_DIR_RELATIVE_TO_PROFILE_ROOT="./"
+	fi
+
+	cd "$PROFILE_ROOT_DIR" &>/dev/null
+
+	while read ; do
+		${ACTION}_this_dotfile "${REPLY#./}"
+	done < <(find "$PROFILE_DIR_RELATIVE_TO_PROFILE_ROOT" -mindepth 1 -maxdepth 1)
+}
+
+function usage {
+	cat <<-EOF >&2
+		dotfile manager written by @machuu, github.com/machuu
+		
+		A dotfile 'profile' is a directory containing files/directories from the
+		user's home directory, which are used to configure the user's system
+		and applications.
+
+		Each file/directory in the profile will replace the corresponding file/directory
+		in the user's home directory. If it already exists, the original is backed up, 
+		and a symlink is created in it's place
+
+		Certain files/directories are merged, instead of replaced:
+		
+		If a file is merged, the original is backed up, and the 'profile' version is 
+		appended to the original.
+
+		If a directory is merged, then only matching files from the 'profile' directory
+		are backed up and replaced. If the home dotfile directory contains a file that 
+		does not exist in the 'profile', then it remains in the home dotfile directory.
+
+		If a dotfile profile is already installed, the current profile will be uninstalled
+		before installing the new profile.
+
+		"$0 <install|uninstall> <profile>"
+
+		commands:
+		install    - install dotfiles from the given profile
+		uninstall  - uninstall dotfiles from the given profile
+
+		<profile>  - name of a directory in the same parent directory as this script ('$THIS_SCRIPT_DIR')
+		
+	EOF
+}
+
+while (( $# )) ; do
+	case "$1" in
+		--help | help | -h | -\? | /\?)
+			usage
+			exit 0
+			;;
+		install | uninstall )
+			arg_ACTION="$1"
+			shift
+			;;
+		* )
+			arg_PROFILE_TARGET_NAME="$1"
+			shift
+			;;
+	esac
+done
+
+HOME_PATH=~/
+
+DEFAULT_ACTION="install"
+ACTION="${arg_ACTION-$DEFAULT_ACTION}"
+
+DEFAULT_PROFILE_TARGET_NAME="default"
+PROFILE_TARGET_NAME="${arg_PROFILE_TARGET_NAME-$DEFAULT_PROFILE_TARGET_NAME}"
+
+DEFAULT_DOTFILES_DIR="$HOME_PATH/.dotfiles"
+DOTFILES_DIR="${arg_DOTFILES_DIR-$DEFAULT_DOTFILES_DIR}"
+mkdir -p "$DOTFILES_DIR"
+
+DOTFILES_BACKUPS_DIR="$DOTFILES_DIR/backups"
+DOTFILES_MERGE_DIR="$DOTFILES_DIR/merged"
+
+DOTFILES_CONFIG_FILE="$DOTFILES_DIR/config"
+PROFILE_CURRENT_NAME=""
+
+HOME_DIRS_TO_MERGE=()
+HOME_DIRS_TO_MERGE+=(".bashrc.d")
+HOME_DIRS_TO_MERGE+=(".config")
+
+HOME_FILES_TO_APPEND=()
+HOME_FILES_TO_APPEND+=(".bashrc")
+
+## Check for existing dotfiles config
+if [[ -s "$DOTFILES_CONFIG_FILE" ]] ; then
+	. "$DOTFILES_CONFIG_FILE"
+fi
+
+PROFILE_TARGET_ROOT_DIR="$THIS_SCRIPT_DIR/$PROFILE_TARGET_NAME"
+PROFILE_CURRENT_ROOT_DIR="$THIS_SCRIPT_DIR/$PROFILE_CURRENT_NAME"
+
+if [[ "$ACTION" = "install" ]] && [[ "$PROFILE_CURRENT_NAME" != "" ]] && [[ "$PROFILE_CURRENT_NAME" != "$PROFILE_TARGET_NAME" ]] ; then
+	# Uninstall current profile, before installing new profile
+	perform_action_between_profile_dir_and_home_dir "uninstall" "$PROFILE_CURRENT_ROOT_DIR" "$HOME_PATH"
+fi
+
+perform_action_between_profile_dir_and_home_dir "$ACTION" "$PROFILE_TARGET_ROOT_DIR" "$HOME_PATH"
