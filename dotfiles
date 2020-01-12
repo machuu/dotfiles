@@ -179,11 +179,11 @@ function install_this_dotfile {
 	local DOTFILE_HOME_PATH="$HOME_PATH/$DOTFILE_PATH"
 
 	# Attempt to install each file/dir from profile dir into corresponding home dir
-	if   [[ ! -e "$DOTFILE_HOME_PATH" ]] ; then
-		ln -s "$DOTFILE_PROFILE_PATH" "$DOTFILE_HOME_PATH"
-	elif [[ -L "$DOTFILE_HOME_PATH" ]] ; then
+	if [[ -L "$DOTFILE_HOME_PATH" ]] ; then
 		# Remove symlink and replace with symlink to new profile
 		rm "$DOTFILE_HOME_PATH"
+		ln -s "$DOTFILE_PROFILE_PATH" "$DOTFILE_HOME_PATH"
+	elif   [[ ! -e "$DOTFILE_HOME_PATH" ]] ; then
 		ln -s "$DOTFILE_PROFILE_PATH" "$DOTFILE_HOME_PATH"
 	elif [[ -f "$DOTFILE_HOME_PATH" ]] || [[ -d "$DOTFILE_HOME_PATH" ]] ; then
 		# target dotfile already exists as a regular file
@@ -305,7 +305,7 @@ while (( $# )) ; do
 	esac
 done
 
-HOME_PATH=~/
+HOME_PATH=~
 
 DEFAULT_ACTION="install"
 ACTION="${arg_ACTION-$DEFAULT_ACTION}"
