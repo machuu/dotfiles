@@ -162,9 +162,9 @@ function merge_this_dotfile {
 
 	if [[ -f "$DOTFILE_HOME_PATH" ]] ; then
 		{
-			echo "===== START $DOTFILE_PROFILE_PATH ====="
+			echo "#===== START $DOTFILE_PROFILE_PATH ====="
 			cat "$DOTFILE_PROFILE_PATH"
-			echo "===== END   $DOTFILE_PROFILE_PATH ====="
+			echo "#===== END   $DOTFILE_PROFILE_PATH ====="
 		} >> "$DOTFILE_HOME_PATH"
 	elif [[ -d "$DOTFILE_HOME_PATH" ]] ; then
 		install_profile_dir_into_home_dir "$DOTFILE_PROFILE_PATH" "$DOTFILE_HOME_PATH"
