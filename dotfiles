@@ -8,7 +8,15 @@ THIS_SCRIPT_NAME="$( basename "${BASH_SOURCE[0]}" )"
 DATESTAMP="$(date "+%Y%m%d_%H%M%S_%Z" )"
 
 THIS_LOG_PATH="/tmp/$THIS_SCRIPT_NAME.$DATESTAMP.log"
-exec 2>"$THIS_LOG_PATH"
+true > "$THIS_LOG_PATH"
+if [[ "$@" =~ (^| )(--)?debug( |$) ]] ; then
+	debug=true
+	# If running debug, echo all output to stdout
+	exec 2>&1 | tee -a "$THIS_LOG_PATH"
+else
+	debug=false
+	exec 2>"$THIS_LOG_PATH"
+fi
 
 set -uexv
 
@@ -23,20 +31,28 @@ function backup_this {
 	local BACKUP_TARGET_RELATIVE_PATH="${BACKUP_TARGET_HOME_PATH#$HOME_PATH}"
 	local BACKUP_TARGET_BACKUP_PATH="$DOTFILES_BACKUPS_DIR/$BACKUP_TARGET_RELATIVE_PATH"
 
+	log "Backing up: '$BACKUP_TARGET_HOME_PATH'"
+
 	# return early if target doesn't exist
-	[[ ! -e "$BACKUP_TARGET_HOME_PATH" ]] && return 0
+	if [[ ! -e "$BACKUP_TARGET_HOME_PATH" ]] ; then
+		log "'$BACKUP_TARGET_HOME_PATH' doesn't exist"
+		return 0
+	fi
 
 	local BACKUP_TARGET_BACKUP_DIR="$( dirname "$BACKUP_TARGET_BACKUP_PATH" )"
 	if [[ ! -d "$BACKUP_TARGET_BACKUP_DIR" ]] ; then
+		log "Creating Directory: '$BACKUP_TARGET_BACKUP_DIR'"
 		mkdir -p "$BACKUP_TARGET_BACKUP_DIR"
 	fi
 
 	# move to backups directory, and rename with a timestamp
+	local BACKUP_TARGET_BACKUP_PATH_DATESTAMP="$BACKUP_TARGET_BACKUP_PATH.bak.$DATESTAMP"
+	log "Moving file '$BACKUP_TARGET_HOME_PATH' -> '$BACKUP_TARGET_BACKUP_PATH_DATESTAMP'"
 	rsync \
 	   -av \
 	   --remove-source-files \
 	   "$BACKUP_TARGET_HOME_PATH" \
-	   "$BACKUP_TARGET_BACKUP_PATH.bak.$DATESTAMP" \
+	   "$BACKUP_TARGET_BACKUP_PATH_DATESTAMP" \
 	   >&2
 }
 
@@ -44,8 +60,16 @@ function copy_this {
 	local COPY_SOURCE="${1-}"
 	local COPY_DEST="${2-}"
 
+	log "Copying '$COPY_SOURCE' -> '$COPY_DEST'"
+
+	if [[ ! -e "$COPY_SOURCE" ]] ; then
+		log "'$COPY_SOURCE' doesn't exist"
+		return 0
+	fi
+
 	local COPY_DEST_DIR="$( dirname "$COPY_DEST" )"
 	if [[ ! -d "$COPY_DEST_DIR" ]] ; then
+		log "Create Copy Destination: '$COPY_DEST_DIR'"
 		mkdir -p "$COPY_DEST_DIR"
 	fi
 
@@ -78,11 +102,15 @@ function restore_this {
 		| sort \
 		| tail -1
 	)"
-	
+
+	log "Attempting to restore '$RESTORE_TARGET_RELATIVE_PATH'"	
 	if [[ ! -e "$RESTORE_SOURCE" ]] ; then
-		echo "No backup found for '$RESTORE_TARGET_HOME_PATH'"
+		log "No backup found for '$RESTORE_TARGET_HOME_PATH'"
 		return 0
+	else
+		log "Found backup: '$RESTORE_SOURCE'"
 	fi
+	log "Restoring '$RESTORE_TARGET_RELATIVE_PATH' from '$RESTORE_SOURCE'"
 
 	rsync \
 	   -av \
@@ -123,20 +151,25 @@ function should_merge_this_dotfile {
 	local DOTFILE_HOME_PATH="${1-}"
 	local DOTFILE_NAME="$(basename "$DOTFILE_HOME_PATH" )"
 
+	log "Checking if '$DOTFILE_HOME_PATH' should be merged"
+
 	if [[ -f "$DOTFILE_HOME_PATH" ]] ; then
 		for HOME_FILE_TO_APPEND in "${HOME_FILES_TO_APPEND[@]}" ; do
 			if [[ "$DOTFILE_NAME" = "$HOME_FILE_TO_APPEND" ]] ; then
+				log "..yep"
 				return 0
 			fi
 		done
 	elif [[ -d "$DOTFILE_HOME_PATH" ]] ; then
 		for HOME_DIR_TO_MERGE in "${HOME_DIRS_TO_MERGE[@]}" ; do
 			if [[ "$DOTFILE_NAME" = "$HOME_DIR_TO_MERGE" ]] ; then
+				log "..yep"
 				return 0
 			fi
 		done
 	fi
 
+	log "..nope"
 	return 1
 }
 
@@ -147,6 +180,7 @@ function merge_this_dotfile {
 	local DOTFILE_MERGE_PATH="$DOTFILES_MERGE_DIR/$DOTFILE_RELATIVE_PATH"
 	local DOTFILE_MERGE_DIR="$( dirname "$DOTFILE_MERGE_PATH" )"
 
+	log "Merging dotfile: '$DOTFILE_RELATIVE_PATH'"
 	mkdir -p "$DOTFILE_MERGE_DIR"
 
 	if [[ -e "$DOTFILE_HOME_PATH" ]] ; then
@@ -179,6 +213,7 @@ function install_this_dotfile {
 	local DOTFILE_HOME_PATH="$HOME_PATH/$DOTFILE_PATH"
 
 	# Attempt to install each file/dir from profile dir into corresponding home dir
+	log "Installing dotfile: '$DOTFILE_HOME_PATH'"
 	if [[ -L "$DOTFILE_HOME_PATH" ]] ; then
 		# Remove symlink and replace with symlink to new profile
 		rm "$DOTFILE_HOME_PATH"
@@ -207,13 +242,14 @@ function uninstall_this_dotfile {
 	local DOTFILE_PROFILE_PATH="$PROFILE_ROOT_DIR/$DOTFILE_PATH"
 	local DOTFILE_HOME_PATH="$HOME_PATH/$DOTFILE_PATH"
 
+	log "Uninstalling dotfile: '$DOTFILE_HOME_PATH'"
 	# Attempt to restore the original DOTFILE in the HOME path
 	if [[ -L "$DOTFILE_HOME_PATH" ]] ; then
 		# Remove symlink and restore with original
 		rm "$DOTFILE_HOME_PATH"
 		restore_this "$DOTFILE_HOME_PATH"
 	else
-		echo "Not modifying '$DOTFILE_HOME_PATH', since it was expected to be a symlink" >&2
+		log "Not modifying '$DOTFILE_HOME_PATH', since it was expected to be a symlink" >&2
 		true
 	fi
 }
@@ -222,6 +258,7 @@ function uninstall_profile_dir_from_home_dir {
 	local PROFILE_DIR="${1-}"
 	local HOME_DIR="${2-}"
 
+	log "Uninstalling Profile: '$PROFILE_DIR'"
 	perform_action_between_profile_dir_and_home_dir uninstall "$PROFILE_DIR" "$HOME_DIR"
 }
 
@@ -229,6 +266,7 @@ function install_profile_dir_into_home_dir {
 	local PROFILE_DIR="${1-}"
 	local HOME_DIR="${2-}"
 
+	log "Installing Profile: '$PROFILE_DIR'"
 	perform_action_between_profile_dir_and_home_dir install "$PROFILE_DIR" "$HOME_DIR"
 }
 
