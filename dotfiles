@@ -84,6 +84,30 @@ function copy_this {
 	fi
 }
 
+function link_this {
+	local LINK_SOURCE="${1-}"
+	local LINK_DEST="${2-}"
+
+	log "Linking '$LINK_SOURCE' -> '$LINK_DEST'"
+
+	if [[ ! -e "$LINK_SOURCE" ]] ; then
+		log "'$LINK_SOURCE' doesn't exist"
+		return 0
+	fi
+
+	local LINK_DEST_DIR="$( dirname "$LINK_DEST" )"
+	if [[ ! -d "$LINK_DEST_DIR" ]] ; then
+		log "Create Link Destination: '$LINK_DEST_DIR'"
+		mkdir -p "$LINK_DEST_DIR"
+	fi
+
+	ln \
+		-sv \
+		"$LINK_SOURCE" \
+		"$LINK_DEST" \
+		>&2
+}
+
 function restore_this {
 	# Finds the latest backup of the target dotfile in HOME_PATH, and renames it
 	# to the original filename
@@ -189,7 +213,7 @@ function merge_this_dotfile {
 		# symlink to the merge copy
 		copy_this   "$DOTFILE_HOME_PATH" "$DOTFILE_MERGE_PATH"
 		backup_this "$DOTFILE_HOME_PATH"
-		ln -s "$DOTFILE_MERGE_PATH" "$DOTFILE_HOME_PATH"
+		link_this   "$DOTFILE_MERGE_PATH" "$DOTFILE_HOME_PATH"
 	else
 		return 0
 	fi
@@ -217,9 +241,9 @@ function install_this_dotfile {
 	if [[ -L "$DOTFILE_HOME_PATH" ]] ; then
 		# Remove symlink and replace with symlink to new profile
 		rm "$DOTFILE_HOME_PATH"
-		ln -s "$DOTFILE_PROFILE_PATH" "$DOTFILE_HOME_PATH"
+		link_this "$DOTFILE_PROFILE_PATH" "$DOTFILE_HOME_PATH"
 	elif   [[ ! -e "$DOTFILE_HOME_PATH" ]] ; then
-		ln -s "$DOTFILE_PROFILE_PATH" "$DOTFILE_HOME_PATH"
+		link_this "$DOTFILE_PROFILE_PATH" "$DOTFILE_HOME_PATH"
 	elif [[ -f "$DOTFILE_HOME_PATH" ]] || [[ -d "$DOTFILE_HOME_PATH" ]] ; then
 		# target dotfile already exists as a regular file
 		if should_merge_this_dotfile "$DOTFILE_HOME_PATH" ; then
@@ -227,7 +251,7 @@ function install_this_dotfile {
 		else
 			# backup and symlink to dotfile profile path
 			backup_this "$DOTFILE_HOME_PATH"
-			ln -s "$DOTFILE_PROFILE_PATH" "$DOTFILE_HOME_PATH"
+			link_this   "$DOTFILE_PROFILE_PATH" "$DOTFILE_HOME_PATH"
 		fi
 	else
 		# If it is not a regular file, directory, or symlink, then
