@@ -54,6 +54,23 @@ function backup_this {
 	   "$BACKUP_TARGET_HOME_PATH" \
 	   "$BACKUP_TARGET_BACKUP_PATH_DATESTAMP" \
 	   >&2
+
+	if [[ -d "$BACKUP_TARGET_HOME_PATH" ]] ; then
+		# Remove any empty folders left behind by rsync
+		find \
+			"$BACKUP_TARGET_HOME_PATH" \
+			-type d \
+			-empty \
+			-delete \
+			>&2
+	fi
+
+	if [[ -d "$BACKUP_TARGET_HOME_PATH" ]] ; then
+		# If it's still there, then we have a problem
+		log "Can't move '$BACKUP_TARGET_HOME_PATH'"
+		"$0" uninstall
+		exit 1
+	fi
 }
 
 function copy_this {
