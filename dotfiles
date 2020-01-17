@@ -144,7 +144,7 @@ function restore_this {
 		| tail -1
 	)"
 
-	log "Attempting to restore '$RESTORE_TARGET_RELATIVE_PATH'"	
+	log "Attempting to restore '$RESTORE_TARGET_RELATIVE_PATH'"
 	if [[ ! -e "$RESTORE_SOURCE" ]] ; then
 		log "No backup found for '$RESTORE_TARGET_HOME_PATH'"
 		return 0
@@ -166,7 +166,7 @@ function get_absolute_path {
 	local ABSOLUTE_PATH=""
 	local ABSOLUTE_PATH_DIR=""
 	local ABSOLUTE_PATH_NAME=""
-	
+
 	if [[ -d "$RELATIVE_PATH" ]] ; then
 		ABSOLUTE_PATH="$(cd "$RELATIVE_PATH" &>/dev/null; pwd -P)"
 	elif [[ -f "$RELATIVE_PATH" ]] ; then
@@ -335,22 +335,22 @@ function perform_action_between_profile_dir_and_home_dir {
 function usage {
 	cat <<-EOF >&2
 		dotfile manager written by @machuu, github.com/machuu
-		
+
 		A dotfile 'profile' is a directory containing files/directories from the
 		user's home directory, which are used to configure the user's system
 		and applications.
 
 		Each file/directory in the profile will replace the corresponding file/directory
-		in the user's home directory. If it already exists, the original is backed up, 
+		in the user's home directory. If it already exists, the original is backed up,
 		and a symlink is created in it's place
 
 		Certain files/directories are merged, instead of replaced:
-		
-		If a file is merged, the original is backed up, and the 'profile' version is 
+
+		If a file is merged, the original is backed up, and the 'profile' version is
 		appended to the original.
 
 		If a directory is merged, then only matching files from the 'profile' directory
-		are backed up and replaced. If the home dotfile directory contains a file that 
+		are backed up and replaced. If the home dotfile directory contains a file that
 		does not exist in the 'profile', then it remains in the home dotfile directory.
 
 		If a dotfile profile is already installed, the current profile will be uninstalled
@@ -363,7 +363,7 @@ function usage {
 		uninstall  - uninstall dotfiles from the given profile
 
 		<profile>  - name of a directory in the same parent directory as this script ('$THIS_SCRIPT_DIR')
-		
+
 	EOF
 }
 
