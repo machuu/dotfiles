@@ -247,6 +247,35 @@ function merge_this_dotfile {
 
 }
 
+function is_this_dotfile_from_a_dotfile_profile {
+	# Check if the Dotfile is a symlink to the dotfile profile
+	# currently being acted on
+	local DOTFILE_HOME_PATH="${1-}"
+	local DOTFILE_LINK_TARGET=""
+
+	# Check if dotfile is a symlink in home path
+	if [[ -L "$DOTFILE_HOME_PATH" ]] ; then
+		DOTFILE_LINK_TARGET="$(readlink "$BACKUP_TARGET_HOME_PATH" )"
+	else
+		# If it's not a symlink, it's not from the dotfile profile
+		return 1
+	fi
+
+	# Assert PROFILE_ROOT_DIR is defined
+	if [[ "${THIS_SCRIPT_DIR-}" = "" ]] ; then
+		# Profile root is not defined.
+		abort "Profile Root directory is not defined"
+	fi
+
+	# If dotfile symlink target points to a path inside the dotfiles root directory, then
+	# it is from one of the dotfile profiles, and we can uninstall it
+	if [[ "$DOTFILE_LINK_TARGET" =~ ^"$THIS_SCRIPT_DIR" ]] ; then
+		return 0
+	else
+		return 1
+	fi
+}
+
 function install_this_dotfile {
 	local DOTFILE_PATH="${1-}"
 	local DOTFILE_NAME="$( basename "$DOTFILE_PATH" )"
@@ -286,9 +315,15 @@ function uninstall_this_dotfile {
 	log "Uninstalling dotfile: '$DOTFILE_HOME_PATH'"
 	# Attempt to restore the original DOTFILE in the HOME path
 	if [[ -L "$DOTFILE_HOME_PATH" ]] ; then
-		# Remove symlink and restore with original
-		rm "$DOTFILE_HOME_PATH"
-		restore_this "$DOTFILE_HOME_PATH"
+		# Remove symlink and restore with original if the HOME path symlink
+		# points somewhere to one of the dotfiles profile directories
+		if is_this_dotfile_from_a_dotfile_profile "$DOTFILE_HOME_PATH" ; then
+			rm "$DOTFILE_HOME_PATH"
+			restore_this "$DOTFILE_HOME_PATH"
+		else
+			log "'$DOTFILE_HOME_PATH' is not from a dotfile profile"
+			log "'$DOTFILE_HOME_PATH' -> '$(readlink "$DOTFILE_HOME_PATH")'"
+		fi
 	else
 		log "Not modifying '$DOTFILE_HOME_PATH', since it was expected to be a symlink" >&2
 		true
