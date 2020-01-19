@@ -24,3 +24,5 @@
 	ui = auto
 [init]
 	templatedir = ~/.git-templates
+[alias]
+    tree = log --oneline --decorate --all --graph
