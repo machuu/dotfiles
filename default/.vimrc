@@ -10,6 +10,7 @@ Plugin 'altercation/vim-colors-solarized'
 Plugin 'tpope/vim-fugitive'
 Plugin 'airblade/vim-gitgutter'
 Plugin 'leafgarland/typescript-vim'
+Plugin 'tpope/vim-commentary'
 
 call vundle#end()
 
