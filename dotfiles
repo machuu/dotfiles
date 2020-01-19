@@ -351,10 +351,14 @@ function perform_action_between_profile_dir_and_home_dir {
 	local PROFILE_DIR="${2-}"
 	local HOME_DIR="${3-}"
 
+	local PROFILE_DIR_RELATIVE_TO_PROFILE_ROOT=""
+
 	if [[ "${PROFILE_ROOT_DIR-notset}" = "notset" ]] ; then
 		local PROFILE_ROOT_DIR="$PROFILE_DIR"
 	fi
-	local PROFILE_DIR_RELATIVE_TO_PROFILE_ROOT="${PROFILE_DIR#$PROFILE_ROOT_DIR}"
+	PROFILE_DIR_RELATIVE_TO_PROFILE_ROOT="${PROFILE_DIR#$PROFILE_ROOT_DIR}"
+	# Remove leading '/', if it's there
+	PROFILE_DIR_RELATIVE_TO_PROFILE_ROOT="${PROFILE_DIR_RELATIVE_TO_PROFILE_ROOT#/}"
 
 	if [[ "$PROFILE_DIR_RELATIVE_TO_PROFILE_ROOT" = "" ]] ; then
 		PROFILE_DIR_RELATIVE_TO_PROFILE_ROOT="./"
