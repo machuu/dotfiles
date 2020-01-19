@@ -255,7 +255,7 @@ function is_this_dotfile_from_a_dotfile_profile {
 
 	# Check if dotfile is a symlink in home path
 	if [[ -L "$DOTFILE_HOME_PATH" ]] ; then
-		DOTFILE_LINK_TARGET="$(readlink "$BACKUP_TARGET_HOME_PATH" )"
+		DOTFILE_LINK_TARGET="$(readlink "$DOTFILE_HOME_PATH" )"
 	else
 		# If it's not a symlink, it's not from the dotfile profile
 		return 1
