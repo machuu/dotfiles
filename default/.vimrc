@@ -18,5 +18,16 @@ filetype plugin indent on
 syntax on
 
 set undodir=~/.vim/.undo//
+set undofile
+set undolevels=1000
+set undoreload=10000
+
+set backup
+set writebackup
 set backupdir=~/.vim/.backup//
+
 set directory=~/.vim/.swp//
+
+:silent call system('mkdir -p ' . &undodir)
+:silent call system('mkdir -p ' . &backupdir)
+:silent call system('mkdir -p ' . &directory)
