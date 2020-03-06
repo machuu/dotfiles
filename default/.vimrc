@@ -11,6 +11,8 @@ Plugin 'tpope/vim-fugitive'
 Plugin 'airblade/vim-gitgutter'
 Plugin 'leafgarland/typescript-vim'
 Plugin 'tpope/vim-commentary'
+Plugin 'martinda/jenkinsfile-vim-syntax'
+Plugin 'ekalinin/dockerfile.vim'"
 
 call vundle#end()
 
