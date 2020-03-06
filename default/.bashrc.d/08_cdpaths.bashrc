@@ -16,3 +16,8 @@ for CD_PATH in "${CD_PATHS[@]}" ; do
 		export CDPATH+=:${CD_PATH// /\\ }
 	fi
 done
+
+
+# Some ENV variables for useful paths
+WINDOWS_TERMINAL_PROFILES_JSON="/mnt/c/Users/$USER/AppData/Local/Packages/Microsoft.WindowsTerminal_8wekyb3d8bbwe/LocalState"
+
