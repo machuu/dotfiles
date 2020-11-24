@@ -11,6 +11,7 @@ Plugin 'tpope/vim-fugitive'
 Plugin 'airblade/vim-gitgutter'
 Plugin 'leafgarland/typescript-vim'
 Plugin 'tpope/vim-commentary'
+Plugin 'tpope/vim-obsession'
 Plugin 'martinda/jenkinsfile-vim-syntax'
 Plugin 'ekalinin/dockerfile.vim'"
 
