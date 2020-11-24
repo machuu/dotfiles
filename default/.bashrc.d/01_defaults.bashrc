@@ -16,3 +16,9 @@ GIT_DIR="$(find ~/ -type d -name "git" | head -1)"
 if [[ $GIT_DIR != "" ]] && [[ -d "$GIT_DIR/scripts" ]] ; then
 	export PATH+=:${GIT_DIR// /\\ }/scripts
 fi
+
+# source BASH git auto-completion if it exists
+GIT_BASH_AUTOCOMPLETION_FILE="~/.bashrc.d/bash_completion.d/git-completion.bash"
+if [[ -s "${GIT_BASH_AUTOCOMPLETION_FILE}" ]] ; then
+	source "${GIT_BASH_AUTOCOMPLETION_FILE}"
+fi
