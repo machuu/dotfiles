@@ -267,9 +267,12 @@ function is_this_dotfile_from_a_dotfile_profile {
 		abort "Profile Root directory is not defined"
 	fi
 
-	# If dotfile symlink target points to a path inside the dotfiles root directory, then
-	# it is from one of the dotfile profiles, and we can uninstall it
+	# If dotfile symlink target points to a path inside the dotfiles root directory,
+	# or a dotfiles merged directory,
+	# then it is from one of the dotfile profiles, and we can uninstall it
 	if [[ "$DOTFILE_LINK_TARGET" =~ ^"$THIS_SCRIPT_DIR" ]] ; then
+		return 0
+	elif should_merge_this_dotfile "$DOTFILE_HOME_PATH" ; then
 		return 0
 	else
 		return 1
