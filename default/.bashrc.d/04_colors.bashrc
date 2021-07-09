@@ -14,16 +14,17 @@ __COLOR() {
 	# starting from the 8 basic colors
 	#   - add 60 for bright/high intensity
 
-	local arg_bg
-	local arg_bright
-	local arg_class
+	local arg_bg=false
+	local arg_bright=false
+	local arg_class=0
 	local arg_color
-	local arg_color_cmd
-	local color_cmd
-	local arg_message
+	local fg_color_cmd=""
+	local bg_color_cmd=""
+	local color_cmd=""
+	local arg_message=""
 
 	# Reset
-	local reset="0;"
+	local reset="0"
 
 	# Regular Colors
 	local black="30"
@@ -69,25 +70,35 @@ __COLOR() {
 
 		# build command if $arg_color is set
 		if [[ ${arg_color-""} != "" ]] ; then
-			${arg_bg-false}     && (( arg_color += 10 ))
-			${arg_bright-false} && (( arg_color += 60 ))
-
-			# Add arg_color_cmd to color_cmd
-			arg_color_cmd="${arg_class-0};$arg_color"
-			[[ ${color_cmd-""} != "" ]] && color_cmd+=";"
-			color_cmd+="$arg_color_cmd"
+			if ${arg_bg-false} ; then
+				(( arg_color += 10 ))
+				bg_color_cmd="$arg_color"
+			else
+				${arg_bright-false} && (( arg_color += 60 ))
+				fg_color_cmd=""
+				[[ "${arg_class-}" != "" ]] && fg_color_cmd+="${arg_class};"
+				fg_color_cmd+="$arg_color"
+			fi
 
 			# Reset flags
 			arg_bg=false
 			arg_bright=false
+			arg_class=""
 			arg_color=""
 			arg_color_cmd=""
 		fi
 	done
+	color_cmd=""
+	[[ "${bg_color_cmd-}" != "" ]] && color_cmd+="$bg_color_cmd"
+
+	if [[ "${fg_color_cmd-}" != "" ]] ; then
+		[[ "${color_cmd}" != "" ]] && color_cmd+=";"
+		color_cmd+="$fg_color_cmd"
+	fi
 
 	echo -ne "\033[${color_cmd}m"
 
-	if [[ ${arg_message-notset} != notset ]] ; then
+	if [[ ${arg_message-} != "" ]] ; then
 		echo "$arg_message"
 		echo -ne "\033[${reset}m"
 	fi
