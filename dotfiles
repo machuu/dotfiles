@@ -339,6 +339,7 @@ function uninstall_profile_dir_from_home_dir {
 
 	log "Uninstalling Profile: '$PROFILE_DIR'"
 	perform_action_between_profile_dir_and_home_dir uninstall "$PROFILE_DIR" "$HOME_DIR"
+	true > "$PROFILE_CURRENT_FILE"
 }
 
 function install_profile_dir_into_home_dir {
@@ -347,6 +348,7 @@ function install_profile_dir_into_home_dir {
 
 	log "Installing Profile: '$PROFILE_DIR'"
 	perform_action_between_profile_dir_and_home_dir install "$PROFILE_DIR" "$HOME_DIR"
+	echo "$PROFILE_TARGET_NAME" > "$PROFILE_CURRENT_FILE"
 }
 
 function perform_action_between_profile_dir_and_home_dir {
@@ -374,6 +376,14 @@ function perform_action_between_profile_dir_and_home_dir {
 	done < <(find "$PROFILE_DIR_RELATIVE_TO_PROFILE_ROOT" -mindepth 1 -maxdepth 1)
 }
 
+function list_profiles {
+	# produce a nicely formatted list of available dotfile profiles (non-hidden directories)
+	cd "$THIS_SCRIPT_DIR" &>/dev/null
+
+	echo "Available Profiles:"
+	find . -type d -maxdepth 1 -name "[[:alpha:]]*" | sed 's/^\.\//  /'
+}
+
 function usage {
 	cat <<-EOF >&2
 		dotfile manager written by @machuu, github.com/machuu
@@ -399,13 +409,16 @@ function usage {
 		before installing the new profile.
 
 		"$0 <install|uninstall> <profile>"
+		"$0 <list>"
 
 		commands:
 		install    - install dotfiles from the given profile
 		uninstall  - uninstall dotfiles from the given profile
+		list       - list available dotfile profiles
 
 		<profile>  - name of a directory in the same parent directory as this script ('$THIS_SCRIPT_DIR')
 
+		$(list_profiles)
 	EOF
 }
 
@@ -415,7 +428,7 @@ while (( $# )) ; do
 			usage
 			exit 0
 			;;
-		install | uninstall )
+		install | uninstall | list )
 			arg_ACTION="$1"
 			shift
 			;;
@@ -431,9 +444,6 @@ HOME_PATH=~
 DEFAULT_ACTION="install"
 ACTION="${arg_ACTION-$DEFAULT_ACTION}"
 
-DEFAULT_PROFILE_TARGET_NAME="default"
-PROFILE_TARGET_NAME="${arg_PROFILE_TARGET_NAME-$DEFAULT_PROFILE_TARGET_NAME}"
-
 DEFAULT_DOTFILES_DIR="$HOME_PATH/.dotfiles"
 DOTFILES_DIR="${arg_DOTFILES_DIR-$DEFAULT_DOTFILES_DIR}"
 mkdir -p "$DOTFILES_DIR"
@@ -443,6 +453,13 @@ DOTFILES_MERGE_DIR="$DOTFILES_DIR/merged"
 
 DOTFILES_CONFIG_FILE="$DOTFILES_DIR/config"
 PROFILE_CURRENT_NAME=""
+PROFILE_CURRENT_FILE="$DOTFILES_DIR/profile"
+if [[ -s "$PROFILE_CURRENT_FILE" ]] ; then
+	PROFILE_CURRENT_NAME="$(head -1 "$PROFILE_CURRENT_FILE")"
+fi
+
+DEFAULT_PROFILE_TARGET_NAME=""
+PROFILE_TARGET_NAME="${arg_PROFILE_TARGET_NAME-$DEFAULT_PROFILE_TARGET_NAME}"
 
 HOME_DIRS_TO_MERGE=()
 HOME_DIRS_TO_MERGE+=(".bashrc.d")
@@ -459,9 +476,40 @@ fi
 PROFILE_TARGET_ROOT_DIR="$THIS_SCRIPT_DIR/$PROFILE_TARGET_NAME"
 PROFILE_CURRENT_ROOT_DIR="$THIS_SCRIPT_DIR/$PROFILE_CURRENT_NAME"
 
-if [[ "$ACTION" = "install" ]] && [[ "$PROFILE_CURRENT_NAME" != "" ]] && [[ "$PROFILE_CURRENT_NAME" != "$PROFILE_TARGET_NAME" ]] ; then
-	# Uninstall current profile, before installing new profile
-	perform_action_between_profile_dir_and_home_dir "uninstall" "$PROFILE_CURRENT_ROOT_DIR" "$HOME_PATH"
-fi
+case $ACTION in
+	install)
+		# Ensure a Target Profile is given
+		if [[ "$PROFILE_TARGET_NAME" == "" ]] ; then
+			cat <<-EOF
+				Please provide a Target Profile name
+				$(list_profiles)
+			EOF
+			exit 1
+		fi
 
-perform_action_between_profile_dir_and_home_dir "$ACTION" "$PROFILE_TARGET_ROOT_DIR" "$HOME_PATH"
+		# If a profile is already installed, uninstall the current profile first
+		if [[ "$PROFILE_CURRENT_NAME" != "" ]] \
+		&& [[ "$PROFILE_CURRENT_NAME" != "$PROFILE_TARGET_NAME" ]] \
+		; then
+			uninstall_profile_dir_from_home_dir \
+				"$PROFILE_CURRENT_ROOT_DIR" \
+				"$HOME_PATH"
+		fi
+		install_profile_dir_into_home_dir \
+			"$PROFILE_TARGET_ROOT_DIR" \
+			"$HOME_PATH"
+		;;
+	uninstall)
+		if [[ "$PROFILE_CURRENT_NAME" == "" ]] ; then
+			echo "No profile currently installed"
+		else
+			uninstall_profile_dir_from_home_dir \
+				"$PROFILE_CURRENT_ROOT_DIR" \
+				"$HOME_PATH"
+		fi
+		;;
+	list )
+		list_profiles
+		;;
+esac
+
