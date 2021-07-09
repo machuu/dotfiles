@@ -385,7 +385,7 @@ function list_profiles {
 }
 
 function usage {
-	cat <<-EOF >&2
+	cat <<-EOF
 		dotfile manager written by @machuu, github.com/machuu
 
 		A dotfile 'profile' is a directory containing files/directories from the
