@@ -11,11 +11,16 @@ set completion-ignore-case on
 ## set default editors
 export EDITOR="vim"
 
-# Add scripts dir to PATH, if it is present
-GIT_DIR="$(find ~/ -type d -name "git" 2>/dev/null | head -1)"
-if [[ $GIT_DIR != "" ]] && [[ -d "$GIT_DIR/scripts" ]] ; then
-	export PATH+=:${GIT_DIR// /\\ }/scripts
-fi
+# Add scripts directories to PATH, if they are present
+GIT_SCRIPTS_DIRS=()
+GIT_SCRIPTS_DIRS+=("$HOME/git/scripts")
+GIT_SCRIPTS_DIRS+=("$HOME/local/scripts")
+GIT_SCRIPTS_DIRS+=("$HOME/local/bin")
+for GIT_SCRIPTS_DIR in "${GIT_SCRIPTS_DIRS[@]}" ; do
+	if [[ -d "$GIT_SCRIPTS_DIR" ]] && [[ ! "$PATH" =~ :$GIT_SCRIPTS_DIR ]] ; then
+		export PATH+=:"${GIT_SCRIPTS_DIR}"
+	fi
+done
 
 # source BASH git auto-completion if it exists
 GIT_BASH_AUTOCOMPLETION_FILE="~/.bashrc.d/bash_completion.d/git-completion.bash"
